@@ -13,16 +13,32 @@ import {
 import { requestAccountAddress, waitForAccountAuth } from "@celo/dappkit";
 import { MonoText } from "../components/StyledText";
 import { Linking } from "expo";
-const Web3 = require("web3");
 
-export default class HomeScreen extends React.Component {
+import { newKit } from '@celo/contractkit'
+import BigNumber from "bignumber.js";
+
+
+
+export default class HomeScreen extends React.Component<{}, {
+  address: string | undefined,
+  phoneNumber: string | undefined,
+  isLoadingBalance: boolean,
+  cUSDBalance: string | undefined,
+}> {
+
   constructor(props) {
     super(props)
 
     this.state = {
       address: undefined,
       phoneNumber: undefined,
+      isLoadingBalance: false,
+      cUSDBalance: undefined,
     }
+  }
+
+  convertToContractDecimals(balance: string, decimals: string) {
+    return new BigNumber(balance).div(new BigNumber(10).pow(parseInt(decimals, 10))).decimalPlaces(2).toString()
   }
 
   login = async () => {
@@ -36,15 +52,25 @@ export default class HomeScreen extends React.Component {
     })
 
     const dappkitResponse = await waitForAccountAuth(requestId)
+    const address = dappkitResponse.address
+    this.setState({ address, phoneNumber: dappkitResponse.phoneNumber, isLoadingBalance: true })
 
-    this.setState({ address: dappkitResponse.address, phoneNumber: dappkitResponse.phoneNumber })
+    const kit = newKit('https://alfajores-infura.celo-testnet.org')
+    kit.defaultAccount = address
+
+    const stableToken = await kit.contracts.getStableToken()
+
+    const [cUSDBalanceBig, cUSDDecimals] = await Promise.all([stableToken.balanceOf(address), stableToken.decimals()])
+    const cUSDBalance = this.convertToContractDecimals(cUSDBalanceBig, cUSDDecimals)
+
+    this.setState({ cUSDBalance, isLoadingBalance: false })
   }
 
   renderLoginState() {
     if (this.state.address !== undefined) {
       return (
       <View>
-        <Text style={styles.getStartedText}>You are logged in. Your address is {this.state.address} and your phoneNumber is {this.state.phoneNumber}</Text>
+        <Text style={styles.getStartedText}>You are logged in. Your address is {this.state.address} and your phoneNumber is {this.state.phoneNumber}. {this.renderBalance()}</Text>
       </View>)
     } else {
       return (
@@ -53,6 +79,18 @@ export default class HomeScreen extends React.Component {
         <Button title="Login" onPress={this.login}/>
       </View>)
     }
+  }
+
+  renderBalance() {
+    if (this.state.isLoadingBalance) {
+      return "Loading Balances ..."
+    }
+
+    if (this.state.address === undefined) {
+      return ""
+    }
+
+    return `Your cUSD balance is ${this.state.cUSDBalance}.`
   }
 
   render() {
