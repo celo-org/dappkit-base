@@ -10,87 +10,132 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { requestAccountAddress, waitForAccountAuth } from "@celo/dappkit";
+import {
+  requestAccountAddress,
+  waitForAccountAuth,
+  ContactsById,
+  PhoneNumberMappingEntryByAddress,
+  fetchContacts,
+} from "@celo/dappkit";
 import { MonoText } from "../components/StyledText";
 import { Linking } from "expo";
 
-import { newKit } from '@celo/contractkit'
+import { newKit } from "@celo/contractkit";
 import BigNumber from "bignumber.js";
+import * as Permissions from "expo-permissions";
 
-
-
-export default class HomeScreen extends React.Component<{}, {
-  address: string | undefined,
-  phoneNumber: string | undefined,
-  isLoadingBalance: boolean,
-  cUSDBalance: string | undefined,
-}> {
-
+export default class HomeScreen extends React.Component<
+  {},
+  {
+    address: string | undefined;
+    phoneNumber: string | undefined;
+    isLoadingBalance: boolean;
+    cUSDBalance: string | undefined;
+    rawContacts: ContactsById;
+    phoneNumbersByAddress: PhoneNumberMappingEntryByAddress;
+  }
+> {
   constructor(props) {
-    super(props)
+    super(props);
 
     this.state = {
       address: undefined,
       phoneNumber: undefined,
       isLoadingBalance: false,
       cUSDBalance: undefined,
-    }
+      rawContacts: {},
+      phoneNumbersByAddress: {}
+    };
   }
 
   convertToContractDecimals(balance: string, decimals: string) {
-    return new BigNumber(balance).div(new BigNumber(10).pow(parseInt(decimals, 10))).decimalPlaces(2).toString()
+    return new BigNumber(balance)
+      .div(new BigNumber(10).pow(parseInt(decimals, 10)))
+      .decimalPlaces(2)
+      .toString();
   }
 
   login = async () => {
-    const requestId = 'login'
-    const dappName = 'My DappName'
-    const callback = Linking.makeUrl('/my/path')
+    const requestId = "login";
+    const dappName = "My DappName";
+    const callback = Linking.makeUrl("/my/path");
     requestAccountAddress({
       requestId,
       dappName,
       callback
-    })
+    });
 
-    const dappkitResponse = await waitForAccountAuth(requestId)
-    const address = dappkitResponse.address
-    this.setState({ address, phoneNumber: dappkitResponse.phoneNumber, isLoadingBalance: true })
+    const dappkitResponse = await waitForAccountAuth(requestId);
+    const address = dappkitResponse.address;
+    this.setState({
+      address,
+      phoneNumber: dappkitResponse.phoneNumber,
+      isLoadingBalance: true
+    });
 
-    const kit = newKit('https://alfajores-infura.celo-testnet.org')
-    kit.defaultAccount = address
+    const kit = newKit("https://alfajores-infura.celo-testnet.org");
+    kit.defaultAccount = address;
 
-    const stableToken = await kit.contracts.getStableToken()
+    const stableToken = await kit.contracts.getStableToken();
 
-    const [cUSDBalanceBig, cUSDDecimals] = await Promise.all([stableToken.balanceOf(address), stableToken.decimals()])
-    const cUSDBalance = this.convertToContractDecimals(cUSDBalanceBig, cUSDDecimals)
+    const [cUSDBalanceBig, cUSDDecimals] = await Promise.all([
+      stableToken.balanceOf(address),
+      stableToken.decimals()
+    ]);
+    const cUSDBalance = this.convertToContractDecimals(
+      cUSDBalanceBig,
+      cUSDDecimals
+    );
 
-    this.setState({ cUSDBalance, isLoadingBalance: false })
-  }
+    this.setState({ cUSDBalance, isLoadingBalance: false });
+
+    const { status } = await Permissions.askAsync(Permissions.CONTACTS);
+
+    if (status != Permissions.PermissionStatus.GRANTED) {
+      return;
+    }
+
+    const { rawContacts, phoneNumbersByAddress } = await fetchContacts(kit)
+
+    this.setState({ rawContacts, phoneNumbersByAddress });
+  };
 
   renderLoginState() {
     if (this.state.address !== undefined) {
       return (
-      <View>
-        <Text style={styles.getStartedText}>You are logged in. Your address is {this.state.address} and your phoneNumber is {this.state.phoneNumber}. {this.renderBalance()}</Text>
-      </View>)
+        <View>
+          <Text style={styles.getStartedText}>
+            You are logged in. Your address is {this.state.address} and your
+            phoneNumber is {this.state.phoneNumber}. {this.renderBalance()}
+          </Text>
+        </View>
+      );
     } else {
       return (
-      <View>
-        <Text style={styles.getStartedText}>Login with the Celo wallet</Text>
-        <Button title="Login" onPress={this.login}/>
-      </View>)
+        <View>
+          <Text style={styles.getStartedText}>Login with the Celo wallet</Text>
+          <Button title="Login" onPress={this.login} />
+        </View>
+      );
     }
   }
 
   renderBalance() {
     if (this.state.isLoadingBalance) {
-      return "Loading Balances ..."
+      return "Loading Balances ...";
     }
 
     if (this.state.address === undefined) {
-      return ""
+      return "";
     }
 
-    return `Your cUSD balance is ${this.state.cUSDBalance}.`
+    return `Your cUSD balance is ${this.state.cUSDBalance}.`;
+  }
+
+  sendcUSD = (address: string) => {
+    return async () => {
+      console.log('send')
+    }
   }
 
   render() {
@@ -112,28 +157,11 @@ export default class HomeScreen extends React.Component<{}, {
           </View>
 
           <View style={styles.getStartedContainer}>
-          { this.renderLoginState() }
+            {this.renderLoginState()}
           </View>
-
 
           <View style={styles.getStartedContainer}>
-            <Text style={styles.getStartedText}>Get started by opening</Text>
-
-            <View
-              style={[styles.codeHighlightContainer, styles.homeScreenFilename]}
-            >
-              <MonoText>screens/HomeScreen.js</MonoText>
-            </View>
-
-            <Text style={styles.getStartedText}>
-              Change this text and your app will automatically reload.
-            </Text>
-          </View>
-
-          <View style={styles.helpContainer}>
-            <TouchableOpacity onPress={handleHelpPress} style={styles.helpLink}>
-              <Text style={styles.helpLinkText}>Login</Text>
-            </TouchableOpacity>
+            {this.renderContacts()}
           </View>
         </ScrollView>
 

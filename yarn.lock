@@ -1288,10 +1288,6 @@
   version "1.0.0"
   resolved "git://github.com/umpirsky/country-list#05fda51cd97b3294e8175ffed06104c44b3c71d7"
 
-"@umpirsky/country-list@git://github.com/umpirsky/country-list.git#05fda51":
-  version "1.0.0"
-  resolved "git://github.com/umpirsky/country-list.git#05fda51cd97b3294e8175ffed06104c44b3c71d7"
-
 "@unimodules/core@~3.0.0":
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/@unimodules/core/-/core-3.0.2.tgz#a2b143fb1e743809ba17c60ae1848f82b8637901"
