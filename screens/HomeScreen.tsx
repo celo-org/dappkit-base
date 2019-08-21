@@ -16,6 +16,9 @@ import {
   ContactsById,
   PhoneNumberMappingEntryByAddress,
   fetchContacts,
+  requestTxSig,
+  waitForSignedTxs,
+  GasCurrency
 } from "@celo/dappkit";
 import { MonoText } from "../components/StyledText";
 import { Linking } from "expo";
@@ -23,6 +26,7 @@ import { Linking } from "expo";
 import { newKit } from "@celo/contractkit";
 import BigNumber from "bignumber.js";
 import * as Permissions from "expo-permissions";
+import { toTxResult } from "@celo/contractkit/lib/utils/tx-result";
 
 export default class HomeScreen extends React.Component<
   {},
@@ -134,8 +138,68 @@ export default class HomeScreen extends React.Component<
 
   sendcUSD = (address: string) => {
     return async () => {
-      console.log('send')
-    }
+      this.setState({ isLoadingBalance: true });
+      const kit = newKit("https://alfajores-infura.celo-testnet.org");
+      kit.defaultAccount = this.state.address;
+
+      // Create the transaction object
+      const stableToken = await kit.contracts.getStableToken();
+      const decimals = await stableToken.decimals();
+      const txObject = stableToken.transfer(
+        address,
+        new BigNumber(10).pow(parseInt(decimals, 10)).toString()
+      ).txo;
+
+      const requestId = "transfer";
+      const dappName = "My DappName";
+      const callback = Linking.makeUrl("/my/path");
+
+      // Request the TX signature from DAppKit
+      requestTxSig(
+        kit,
+        [
+          {
+            tx: txObject,
+            from: this.state.address,
+            to: stableToken.contract.options.address,
+            gasCurrency: GasCurrency.cUSD
+          }
+        ],
+        { requestId, dappName, callback }
+      );
+
+      const dappkitResponse = await waitForSignedTxs(requestId);
+      const tx = dappkitResponse.rawTxs[0];
+
+      // Send the signed transaction via web3
+      await toTxResult(kit.web3.eth.sendSignedTransaction(tx)).waitReceipt()
+
+      const [cUSDBalanceBig, cUSDDecimals] = await Promise.all([
+        stableToken.balanceOf(this.state.address),
+        stableToken.decimals()
+      ]);
+      const cUSDBalance = this.convertToContractDecimals(
+        cUSDBalanceBig,
+        cUSDDecimals
+      );
+
+      this.setState({ cUSDBalance, isLoadingBalance: false })
+    };
+  };
+
+  renderContacts() {
+    return Object.entries(this.state.phoneNumbersByAddress).map(
+      ([address, entry]) => {
+        const contact = this.state.rawContacts[entry.id];
+        return (
+          <Button
+            key={address}
+            title={`Send 1 cUSD to ${contact.name}`}
+            onPress={this.sendcUSD(address)}
+          />
+        );
+      }
+    );
   }
 
   render() {
