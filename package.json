@@ -12,7 +12,7 @@
     "preset": "jest-expo"
   },
   "dependencies": {
-    "@celo/dappkit": "0.0.8",
+    "@celo/dappkit": "1.2.0",
     "@expo/samples": "~3.0.3",
     "@expo/vector-icons": "^10.0.3",
     "@react-navigation/web": "^1.0.0-alpha.9",
